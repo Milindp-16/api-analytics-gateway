@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactCompiler: true,
-  serverExternalPackages: ["geoip-lite"],
+  serverExternalPackages: ["geoip-lite", "socket.io"],
 };
 
 export default nextConfig;

@@ -5,7 +5,7 @@ const BLOCK_DURATION_S = 5 * 60;  // 5 minutes block
 
 const LIMITS = {
   free: 50,
-  pro: 10000,
+  pro: 1000,
 };
 
 /**
@@ -74,4 +74,4 @@ export async function checkRateLimit(apiKey, plan = "free") {
   }
 }
 
-export { WINDOW_SIZE_MS, MAX_REQUESTS, BLOCK_DURATION_S };
+export { WINDOW_SIZE_MS, LIMITS, BLOCK_DURATION_S };

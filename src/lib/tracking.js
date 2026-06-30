@@ -4,6 +4,7 @@ import redis from "@/lib/redis";
 import { checkRateLimit, BLOCK_DURATION_S } from "@/lib/rateLimit";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
+import { emitHit, emitThrottle, emitGeo } from "@/lib/socketEmitter";
 
 // Predefined geo-data for well-known public DNS IPs (for demo)
 const KNOWN_IPS = {
@@ -78,7 +79,7 @@ export async function trackRequest(request, endpoint) {
     if (rateLimitResult.newlyBlocked) {
       const geo = resolveGeo(ip);
       try {
-        const throttleEntry = JSON.stringify({
+        const throttleData = {
           ip: apiKey.slice(0, 15) + "...", // Log partial API key instead of IP for security demo
           endpoint,
           reason: `Exceeded ${rateLimitResult.total} requests/minute (${plan} plan)`,
@@ -86,10 +87,14 @@ export async function trackRequest(request, endpoint) {
           city: geo?.city || "Unknown",
           country: geo?.country || "Unknown",
           timestamp: new Date().toISOString(),
-        });
+        };
+        const throttleEntry = JSON.stringify(throttleData);
         await redis.lpush("throttle:logs", throttleEntry);
         await redis.ltrim("throttle:logs", 0, 99); // Keep last 100 entries
         await redis.sadd("throttle:ips", apiKey); // Actually tracking API keys now, but reusing set name
+
+        // 🔌 Real-time push: throttle event
+        emitThrottle(throttleData);
       } catch (e) {
         console.error("Failed to log throttle event:", e.message);
       }
@@ -112,17 +117,22 @@ export async function trackRequest(request, endpoint) {
   }
 
   // Track the hit in Redis
+  let newHitCount = 0;
   try {
     const nowMs = Date.now();
     const coeff = 1000 * 60 * 5; // 5 minutes
     const rounded = new Date(Math.floor(nowMs / coeff) * coeff);
     const timeBucket = rounded.toISOString().slice(0, 16); // e.g. "2026-06-29T12:35"
     
-    await Promise.all([
+    const [hitCount] = await Promise.all([
       redis.incr(`api:hits:${endpoint}`),
       redis.incr(`api:hits:timeline:${endpoint}:${timeBucket}`),
       redis.expire(`api:hits:timeline:${endpoint}:${timeBucket}`, 7 * 24 * 60 * 60),
     ]);
+    newHitCount = hitCount;
+
+    // 🔌 Real-time push: hit event
+    emitHit(endpoint, newHitCount);
   } catch (error) {
     console.error("Tracking Redis error:", error.message);
   }
@@ -131,7 +141,7 @@ export async function trackRequest(request, endpoint) {
   const geo = resolveGeo(ip);
   if (geo) {
     try {
-      const geoEntry = JSON.stringify({
+      const geoData = {
         ip,
         endpoint,
         lat: geo.lat,
@@ -139,10 +149,14 @@ export async function trackRequest(request, endpoint) {
         city: geo.city,
         country: geo.country,
         timestamp: new Date().toISOString(),
-      });
+      };
+      const geoEntry = JSON.stringify(geoData);
       await redis.lpush("geo:hits", geoEntry);
       await redis.ltrim("geo:hits", 0, 999); // Keep last 1000
       await redis.sadd("geo:countries", geo.country);
+
+      // 🔌 Real-time push: geo event
+      emitGeo(geoData);
     } catch (e) {
       console.error("Failed to save geo hit:", e.message);
     }

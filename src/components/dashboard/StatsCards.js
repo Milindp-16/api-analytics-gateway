@@ -36,7 +36,7 @@ const colorClasses = [
   "text-[oklch(0.8_0.15_85)] bg-[oklch(0.8_0.15_85/0.1)]",
 ];
 
-export default function StatsCards({ totalHits, endpointCount, blockedIPs, countries }) {
+export default function StatsCards({ totalHits, endpointCount, blockedIPs, countries, connected }) {
   const stats = [
     { label: "Total Hits", value: totalHits.toLocaleString(), icon: "hits", change: null },
     { label: "Active Endpoints", value: endpointCount, icon: "endpoints", change: null },
@@ -55,8 +55,27 @@ export default function StatsCards({ totalHits, endpointCount, blockedIPs, count
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">
+                <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                   {stat.label}
+                  {/* Show Live indicator on the first card */}
+                  {i === 0 && (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                        connected
+                          ? "bg-emerald-500/15 text-emerald-500"
+                          : "bg-yellow-500/15 text-yellow-500"
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          connected
+                            ? "bg-emerald-500 animate-pulse"
+                            : "bg-yellow-500"
+                        }`}
+                      />
+                      {connected ? "Live" : "Polling"}
+                    </span>
+                  )}
                 </p>
                 <p className="text-3xl font-bold tracking-tight">
                   {stat.value}

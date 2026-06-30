@@ -34,6 +34,15 @@ class InMemoryStore {
     return Promise.resolve("OK");
   }
 
+  del(...keys) {
+    let removed = 0;
+    for (const k of keys) {
+      if (this._data.delete(k)) removed++;
+      this._expiry.delete(k);
+    }
+    return Promise.resolve(removed);
+  }
+
   setex(key, seconds, value) {
     this._data.set(key, value);
     this._expiry.set(key, Date.now() + seconds * 1000);
@@ -241,6 +250,10 @@ const wrapper = {
   async set(key, value) {
     const r = await resolvedClientPromise;
     return r.set(key, value);
+  },
+  async del(...keys) {
+    const r = await resolvedClientPromise;
+    return r.del(...keys);
   },
   async setex(key, seconds, value) {
     const r = await resolvedClientPromise;

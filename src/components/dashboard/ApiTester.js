@@ -28,11 +28,13 @@ const SIMULATED_IPS = [
 ];
 
 
-export default function ApiTester({ onRequestComplete, apiKey }) {
+export default function ApiTester({ onRequestComplete, apiKey, plan = "free" }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState({});
   const [burstRunning, setBurstRunning] = useState(false);
   const [burstProgress, setBurstProgress] = useState(0);
+
+  const isPro = plan === "pro";
 
   const hitEndpoint = useCallback(
     async (path, simulateIp = null) => {
@@ -93,7 +95,7 @@ export default function ApiTester({ onRequestComplete, apiKey }) {
     // Pick a random IP to act as the "malicious" attacker for this burst session
     const maliciousIp = SIMULATED_IPS[Math.floor(Math.random() * SIMULATED_IPS.length)];
 
-    const total = 55; // Enough to trigger rate limit (50 is the threshold)
+    const total = 55; // Enough to trigger rate limit on free (50 threshold), safe on pro (1000 threshold)
     for (let i = 0; i < total; i++) {
       const ep = ENDPOINTS[i % ENDPOINTS.length];
       await hitEndpoint(ep.path, maliciousIp);
@@ -107,10 +109,31 @@ export default function ApiTester({ onRequestComplete, apiKey }) {
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold">API Tester</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Fire requests to generate analytics data
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base font-semibold">API Tester</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Fire requests to generate analytics data
+            </p>
+          </div>
+          <Badge
+            variant={isPro ? "default" : "secondary"}
+            className={
+              isPro
+                ? "bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 border-amber-500/30"
+                : ""
+            }
+          >
+            {isPro ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3 mr-1">
+                  <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+                PRO
+              </>
+            ) : "FREE"}
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
         {/* Endpoint buttons */}
@@ -137,14 +160,14 @@ export default function ApiTester({ onRequestComplete, apiKey }) {
           ))}
         </div>
 
-        {/* Burst button */}
+        {/* Burst button — behavior hint changes based on plan */}
         <div className="flex items-center gap-3">
           <Button
-            variant="destructive"
+            variant={isPro ? "outline" : "destructive"}
             size="sm"
             onClick={handleBurst}
             disabled={burstRunning}
-            className="gap-2"
+            className={`gap-2 ${isPro ? "border-amber-500/40 text-amber-500 hover:bg-amber-500/10 hover:border-amber-500/60" : ""}`}
           >
             {burstRunning ? (
               <>
@@ -165,7 +188,9 @@ export default function ApiTester({ onRequestComplete, apiKey }) {
                 >
                   <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
                 </svg>
-                Burst (55 reqs — triggers throttle)
+                {isPro
+                  ? "Burst 55 reqs (within Pro limit ✓)"
+                  : "Burst 55 reqs (exceeds Free limit ⛔)"}
               </>
             )}
           </Button>
@@ -173,13 +198,20 @@ export default function ApiTester({ onRequestComplete, apiKey }) {
             <div className="flex-1">
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                 <div
-                  className="h-full rounded-full bg-destructive transition-all duration-100"
+                  className={`h-full rounded-full transition-all duration-100 ${isPro ? "bg-amber-500" : "bg-destructive"}`}
                   style={{ width: `${(burstProgress / 55) * 100}%` }}
                 />
               </div>
             </div>
           )}
         </div>
+
+        {/* Plan-specific hint */}
+        <p className="text-xs text-muted-foreground/70">
+          {isPro
+            ? "Pro plan: 1,000 reqs/min — burst of 55 will NOT trigger rate limiting."
+            : "Free plan: 50 reqs/min — burst of 55 will exceed the limit and block your API key."}
+        </p>
 
         {/* Results log */}
         {results.length > 0 && (

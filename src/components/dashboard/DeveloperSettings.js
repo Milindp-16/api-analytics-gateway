@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Eye, EyeOff, Copy, RefreshCw, Zap } from "lucide-react";
 
-export default function DeveloperSettings({ onKeyUpdate }) {
+export default function DeveloperSettings({ onKeyUpdate, onPlanUpdate }) {
   const [apiKey, setApiKey] = useState(null);
   const [plan, setPlan] = useState("free");
   const [loading, setLoading] = useState(true);
@@ -18,11 +18,14 @@ export default function DeveloperSettings({ onKeyUpdate }) {
       .then(res => res.json())
       .then(data => {
         if (data.apiKey) setApiKey(data.apiKey);
-        if (data.plan) setPlan(data.plan);
+        if (data.plan) {
+          setPlan(data.plan);
+          if (onPlanUpdate) onPlanUpdate(data.plan);
+        }
         if (data.apiKey && onKeyUpdate) onKeyUpdate(data.apiKey);
       })
       .finally(() => setLoading(false));
-  }, [onKeyUpdate]);
+  }, [onKeyUpdate, onPlanUpdate]);
 
   const generateKey = async () => {
     setLoading(true);
@@ -33,6 +36,7 @@ export default function DeveloperSettings({ onKeyUpdate }) {
         setApiKey(data.apiKey);
         setPlan(data.plan);
         if (onKeyUpdate) onKeyUpdate(data.apiKey);
+        if (onPlanUpdate) onPlanUpdate(data.plan);
         toast.success(apiKey ? "API Key Regenerated!" : "API Key Generated!");
       } else {
         toast.error(data.error || "Failed to generate key");
@@ -50,6 +54,7 @@ export default function DeveloperSettings({ onKeyUpdate }) {
       const data = await res.json();
       if (res.ok) {
         setPlan(data.plan);
+        if (onPlanUpdate) onPlanUpdate(data.plan);
         toast.success(data.message);
       } else {
         toast.error(data.error || "Failed to upgrade");
@@ -88,7 +93,7 @@ export default function DeveloperSettings({ onKeyUpdate }) {
             <CardDescription>Manage your API Key and billing tier.</CardDescription>
           </div>
           <Badge variant={plan === 'pro' ? "default" : "secondary"} className={plan === 'pro' ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 border-amber-500/30' : ''}>
-            {plan === 'pro' ? 'PRO PLAN (10,000 reqs/min)' : 'FREE PLAN (50 reqs/min)'}
+            {plan === 'pro' ? 'PRO PLAN (1,000 reqs/min)' : 'FREE PLAN (50 reqs/min)'}
           </Badge>
         </div>
       </CardHeader>

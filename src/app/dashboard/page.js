@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import Navbar from "@/components/Navbar";
 import StatsCards from "@/components/dashboard/StatsCards";
@@ -9,6 +9,7 @@ import TimelineChart from "@/components/dashboard/TimelineChart";
 import ThrottleTable from "@/components/dashboard/ThrottleTable";
 import ApiTester from "@/components/dashboard/ApiTester";
 import DeveloperSettings from "@/components/dashboard/DeveloperSettings";
+import { useSocket } from "@/hooks/useSocket";
 
 // Dynamically import GeoHeatmap to avoid SSR issues with Leaflet
 const GeoHeatmap = dynamic(
@@ -36,7 +37,13 @@ export default function DashboardPage() {
   const [blockedIPs, setBlockedIPs] = useState(0);
   const [loading, setLoading] = useState(true);
   const [apiKey, setApiKey] = useState(null);
+  const [plan, setPlan] = useState("free");
 
+  const { socket, connected } = useSocket();
+  // Track known countries in a ref to avoid re-renders for set operations
+  const countriesRef = useRef(new Set());
+
+  // One-time initial data fetch via REST
   const fetchAllData = useCallback(async () => {
     try {
       const [hitsRes, timelineRes, geoRes, throttleRes] = await Promise.all([
@@ -49,8 +56,13 @@ export default function DashboardPage() {
       setHitsData(hitsRes.hits || []);
       setTotalHits(hitsRes.totalHits || 0);
       setTimelineData(timelineRes.timeline || []);
-      setGeoData(geoRes.geoData || []);
+
+      const geoItems = geoRes.geoData || [];
+      setGeoData(geoItems);
       setUniqueCountries(geoRes.uniqueCountries || 0);
+      // Populate the countries ref from initial data
+      geoItems.forEach((g) => countriesRef.current.add(g.country));
+
       setThrottleLogs(throttleRes.logs || []);
       setBlockedIPs(throttleRes.uniqueBlockedIPs || 0);
     } catch (err) {
@@ -60,18 +72,92 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Fetch initial data once on mount
   useEffect(() => {
     fetchAllData();
-
-    // Auto-refresh every 10 seconds
-    const interval = setInterval(fetchAllData, 10000);
-    return () => clearInterval(interval);
   }, [fetchAllData]);
 
-  const handleRequestComplete = () => {
-    // Refresh data after API tester fires requests (slight delay for processing)
-    setTimeout(fetchAllData, 500);
-  };
+  // Real-time Socket.io event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    // ─── api:hit ───
+    // Incrementally update the hit count for the endpoint that was just hit
+    const onHit = (data) => {
+      // data: { endpoint, name, count, timestamp }
+      setHitsData((prev) => {
+        const updated = prev.map((item) =>
+          item.endpoint === data.endpoint
+            ? { ...item, count: data.count }
+            : item
+        );
+        // If endpoint doesn't exist in the array yet, add it
+        if (!updated.find((item) => item.endpoint === data.endpoint)) {
+          updated.push({
+            endpoint: data.endpoint,
+            name: data.name,
+            count: data.count,
+          });
+        }
+        return updated;
+      });
+      setTotalHits((prev) => prev + 1);
+    };
+
+    // ─── api:throttle ───
+    // Prepend the new throttle entry to the logs
+    const onThrottle = (data) => {
+      // data: { ip, endpoint, reason, blockedUntil, city, country, timestamp }
+      setThrottleLogs((prev) => [data, ...prev].slice(0, 100));
+      setBlockedIPs((prev) => prev + 1);
+    };
+
+    // ─── api:geo ───
+    // Merge the new geo point into the aggregated geo data
+    const onGeo = (data) => {
+      // data: { ip, endpoint, lat, lng, city, country, timestamp }
+      setGeoData((prev) => {
+        const key = `${data.lat}:${data.lng}`;
+        const existing = prev.find(
+          (g) => `${g.lat}:${g.lng}` === key
+        );
+        if (existing) {
+          return prev.map((g) =>
+            `${g.lat}:${g.lng}` === key
+              ? { ...g, count: (g.count || 1) + 1, lastHit: data.timestamp }
+              : g
+          );
+        }
+        return [
+          ...prev,
+          {
+            lat: data.lat,
+            lng: data.lng,
+            city: data.city,
+            country: data.country,
+            count: 1,
+            lastHit: data.timestamp,
+          },
+        ];
+      });
+
+      // Update unique countries
+      if (data.country && !countriesRef.current.has(data.country)) {
+        countriesRef.current.add(data.country);
+        setUniqueCountries(countriesRef.current.size);
+      }
+    };
+
+    socket.on("api:hit", onHit);
+    socket.on("api:throttle", onThrottle);
+    socket.on("api:geo", onGeo);
+
+    return () => {
+      socket.off("api:hit", onHit);
+      socket.off("api:throttle", onThrottle);
+      socket.off("api:geo", onGeo);
+    };
+  }, [socket]);
 
   if (loading) {
     return (
@@ -99,7 +185,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="mb-6">
-          <DeveloperSettings onKeyUpdate={setApiKey} />
+          <DeveloperSettings onKeyUpdate={setApiKey} onPlanUpdate={setPlan} />
         </div>
 
         <div className="mb-6">
@@ -108,6 +194,7 @@ export default function DashboardPage() {
             endpointCount={hitsData.length || 3}
             blockedIPs={blockedIPs}
             countries={uniqueCountries}
+            connected={connected}
           />
         </div>
 
@@ -122,7 +209,7 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ThrottleTable logs={throttleLogs} />
-          <ApiTester onRequestComplete={handleRequestComplete} apiKey={apiKey} />
+          <ApiTester apiKey={apiKey} plan={plan} />
         </div>
       </main>
     </div>

@@ -80,9 +80,13 @@ export async function PUT() {
     user.plan = "pro";
     await user.save();
 
-    // Update the Redis cache if they have a key
+    // Update the Redis cache and clear any stale rate-limit state
     if (user.apiKey) {
       await redis.setex(`auth:${user.apiKey}`, 3600, "pro");
+      // Clear any block from the free plan so Pro takes effect immediately
+      await redis.del(`blocked:key:${user.apiKey}`);
+      // Clear the sliding-window counter so old free-plan hits don't carry over
+      await redis.del(`ratelimit:key:${user.apiKey}`);
     }
 
     return NextResponse.json({
