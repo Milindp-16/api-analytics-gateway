@@ -4,7 +4,7 @@ import redis from "@/lib/redis";
 import { checkRateLimit, BLOCK_DURATION_S } from "@/lib/rateLimit";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { emitHit, emitThrottle, emitGeo } from "@/lib/socketEmitter";
+import { emitHit, emitThrottle, emitGeo, emitLatency } from "@/lib/socketEmitter";
 
 // Predefined geo-data for well-known public DNS IPs (for demo)
 const KNOWN_IPS = {
@@ -124,7 +124,7 @@ export async function trackRequest(request, endpoint) {
     const rounded = new Date(Math.floor(nowMs / coeff) * coeff);
     const timeBucket = rounded.toISOString().slice(0, 16); // e.g. "2026-06-29T12:35"
     
-    const [hitCount] = await Promise.all([
+    const [hitCount, bucketCount] = await Promise.all([
       redis.incr(`api:hits:${endpoint}`),
       redis.incr(`api:hits:timeline:${endpoint}:${timeBucket}`),
       redis.expire(`api:hits:timeline:${endpoint}:${timeBucket}`, 7 * 24 * 60 * 60),
@@ -132,7 +132,7 @@ export async function trackRequest(request, endpoint) {
     newHitCount = hitCount;
 
     // 🔌 Real-time push: hit event
-    emitHit(endpoint, newHitCount);
+    emitHit(endpoint, newHitCount, timeBucket, bucketCount);
   } catch (error) {
     console.error("Tracking Redis error:", error.message);
   }
@@ -163,4 +163,24 @@ export async function trackRequest(request, endpoint) {
   }
 
   return null; // No rate limit issue, continue to response
+}
+
+/**
+ * Record the latency of an API request.
+ * @param {string} endpoint - The API endpoint
+ * @param {number} latencyMs - Response time in milliseconds
+ */
+export async function recordLatency(endpoint, latencyMs) {
+  try {
+    const key = `api:latency:${endpoint}`;
+    // Push new latency to the list
+    await redis.lpush(key, Math.round(latencyMs));
+    // Trim list to keep only the most recent 1000 requests
+    await redis.ltrim(key, 0, 999);
+    
+    // 🔌 Real-time push: latency event
+    emitLatency(endpoint, Math.round(latencyMs));
+  } catch (err) {
+    console.error("Failed to record latency:", err.message);
+  }
 }

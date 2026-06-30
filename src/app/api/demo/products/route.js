@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { trackRequest } from "@/lib/tracking";
+import { trackRequest, recordLatency } from "@/lib/tracking";
 
 const MOCK_PRODUCTS = [
   { id: 1, name: "Quantum Keyboard", price: 149.99, category: "Electronics", stock: 234 },
@@ -13,13 +13,20 @@ const MOCK_PRODUCTS = [
 ];
 
 export async function GET(request) {
+  const start = performance.now();
+
   const blocked = await trackRequest(request, "/api/demo/products");
   if (blocked) return blocked;
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     data: MOCK_PRODUCTS,
     count: MOCK_PRODUCTS.length,
     endpoint: "/api/demo/products",
     timestamp: new Date().toISOString(),
   });
+
+  const latency = performance.now() - start;
+  await recordLatency("/api/demo/products", latency);
+
+  return res;
 }

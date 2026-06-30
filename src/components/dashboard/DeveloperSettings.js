@@ -47,20 +47,24 @@ export default function DeveloperSettings({ onKeyUpdate, onPlanUpdate }) {
     setLoading(false);
   };
 
-  const upgradePlan = async () => {
+  const changePlan = async (newPlan) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/api-keys", { method: "PUT" });
+      const res = await fetch("/api/auth/api-keys", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: newPlan }),
+      });
       const data = await res.json();
       if (res.ok) {
         setPlan(data.plan);
         if (onPlanUpdate) onPlanUpdate(data.plan);
         toast.success(data.message);
       } else {
-        toast.error(data.error || "Failed to upgrade");
+        toast.error(data.error || "Failed to change plan");
       }
     } catch (e) {
-      toast.error("Error upgrading plan");
+      toast.error("Error changing plan");
     }
     setLoading(false);
   };
@@ -131,12 +135,18 @@ export default function DeveloperSettings({ onKeyUpdate, onPlanUpdate }) {
           Roll Key
         </Button>
 
-        {plan === 'free' && (
-          <Button size="sm" onClick={upgradePlan} disabled={loading || !apiKey} className="bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 border border-amber-500/30 shadow-none">
-            <Zap className="mr-2 h-3.5 w-3.5 fill-amber-500" />
-            Upgrade to Pro
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {plan === 'pro' ? (
+            <Button size="sm" variant="outline" onClick={() => changePlan('free')} disabled={loading || !apiKey} className="shadow-none border-border/50 text-muted-foreground hover:text-foreground">
+              Downgrade to Free
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => changePlan('pro')} disabled={loading || !apiKey} className="bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 border border-amber-500/30 shadow-none">
+              <Zap className="mr-2 h-3.5 w-3.5 fill-amber-500" />
+              Upgrade to Pro
+            </Button>
+          )}
+        </div>
       </CardFooter>
     </Card>
   );

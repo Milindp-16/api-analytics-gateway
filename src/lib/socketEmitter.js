@@ -12,8 +12,10 @@ function getIO() {
  * Emit when an API endpoint receives a successful hit.
  * @param {string} endpoint - e.g. "/api/demo/users"
  * @param {number} newCount - updated total hit count for this endpoint
+ * @param {string} timeBucket - current 5-minute bucket e.g. "2026-06-29T12:35"
+ * @param {number} bucketCount - updated hit count for this bucket
  */
-export function emitHit(endpoint, newCount) {
+export function emitHit(endpoint, newCount, timeBucket, bucketCount) {
   const io = getIO();
   if (!io) return;
 
@@ -21,6 +23,8 @@ export function emitHit(endpoint, newCount) {
     endpoint,
     name: endpoint.split("/").pop(),
     count: newCount,
+    timeBucket,
+    bucketCount,
     timestamp: new Date().toISOString(),
   });
 }
@@ -45,4 +49,20 @@ export function emitGeo(geoEntry) {
   if (!io) return;
 
   io.emit("api:geo", geoEntry);
+}
+
+/**
+ * Emit when a latency metric is recorded.
+ * @param {string} endpoint - The endpoint path
+ * @param {number} latency - The response latency in milliseconds
+ */
+export function emitLatency(endpoint, latency) {
+  const io = getIO();
+  if (!io) return;
+
+  io.emit("api:latency", {
+    endpoint,
+    latency,
+    timestamp: new Date().toISOString(),
+  });
 }

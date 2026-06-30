@@ -9,6 +9,7 @@ import TimelineChart from "@/components/dashboard/TimelineChart";
 import ThrottleTable from "@/components/dashboard/ThrottleTable";
 import ApiTester from "@/components/dashboard/ApiTester";
 import DeveloperSettings from "@/components/dashboard/DeveloperSettings";
+import LatencyMetrics from "@/components/dashboard/LatencyMetrics";
 import { useSocket } from "@/hooks/useSocket";
 
 // Dynamically import GeoHeatmap to avoid SSR issues with Leaflet
@@ -32,6 +33,7 @@ export default function DashboardPage() {
   const [totalHits, setTotalHits] = useState(0);
   const [timelineData, setTimelineData] = useState([]);
   const [geoData, setGeoData] = useState([]);
+  const [latencyData, setLatencyData] = useState({});
   const [throttleLogs, setThrottleLogs] = useState([]);
   const [uniqueCountries, setUniqueCountries] = useState(0);
   const [blockedIPs, setBlockedIPs] = useState(0);
@@ -46,16 +48,18 @@ export default function DashboardPage() {
   // One-time initial data fetch via REST
   const fetchAllData = useCallback(async () => {
     try {
-      const [hitsRes, timelineRes, geoRes, throttleRes] = await Promise.all([
+      const [hitsRes, timelineRes, geoRes, throttleRes, latencyRes] = await Promise.all([
         fetch("/api/analytics/hits").then((r) => r.json()),
         fetch("/api/analytics/timeline").then((r) => r.json()),
         fetch("/api/analytics/geo").then((r) => r.json()),
         fetch("/api/analytics/throttle-logs").then((r) => r.json()),
+        fetch("/api/analytics/latency").then((r) => r.json()),
       ]);
 
       setHitsData(hitsRes.hits || []);
       setTotalHits(hitsRes.totalHits || 0);
       setTimelineData(timelineRes.timeline || []);
+      setLatencyData(latencyRes.latencyData || {});
 
       const geoItems = geoRes.geoData || [];
       setGeoData(geoItems);
@@ -84,7 +88,7 @@ export default function DashboardPage() {
     // ─── api:hit ───
     // Incrementally update the hit count for the endpoint that was just hit
     const onHit = (data) => {
-      // data: { endpoint, name, count, timestamp }
+      // data: { endpoint, name, count, timeBucket, bucketCount, timestamp }
       setHitsData((prev) => {
         const updated = prev.map((item) =>
           item.endpoint === data.endpoint
@@ -102,6 +106,33 @@ export default function DashboardPage() {
         return updated;
       });
       setTotalHits((prev) => prev + 1);
+
+      // Update Timeline data
+      if (data.timeBucket && data.bucketCount !== undefined) {
+        setTimelineData((prev) => {
+          const updated = [...prev];
+          const index = updated.findIndex((t) => t.hour === data.timeBucket);
+          
+          if (index !== -1) {
+            // Update existing time bucket
+            updated[index] = {
+              ...updated[index],
+              [data.name]: data.bucketCount,
+            };
+          } else {
+            // New 5-minute bucket started
+            const newBucket = {
+              hour: data.timeBucket,
+              [data.name]: data.bucketCount,
+            };
+            updated.push(newBucket);
+            if (updated.length > 24) {
+              updated.shift(); // Keep only last 2 hours (24 * 5 mins)
+            }
+          }
+          return updated;
+        });
+      }
     };
 
     // ─── api:throttle ───
@@ -148,14 +179,29 @@ export default function DashboardPage() {
       }
     };
 
+    // ─── api:latency ───
+    const onLatency = (data) => {
+      // data: { endpoint, latency, timestamp }
+      setLatencyData((prev) => {
+        const currentList = prev[data.endpoint] || [];
+        return {
+          ...prev,
+          // Prepend new latency and keep max 1000 items
+          [data.endpoint]: [data.latency, ...currentList].slice(0, 1000),
+        };
+      });
+    };
+
     socket.on("api:hit", onHit);
     socket.on("api:throttle", onThrottle);
     socket.on("api:geo", onGeo);
+    socket.on("api:latency", onLatency);
 
     return () => {
       socket.off("api:hit", onHit);
       socket.off("api:throttle", onThrottle);
       socket.off("api:geo", onGeo);
+      socket.off("api:latency", onLatency);
     };
   }, [socket]);
 
@@ -203,8 +249,9 @@ export default function DashboardPage() {
           <TimelineChart data={timelineData} />
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <GeoHeatmap data={geoData} />
+          <LatencyMetrics data={latencyData} />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -67,22 +67,25 @@ export async function POST() {
   }
 }
 
-export async function PUT() {
+export async function PUT(request) {
   try {
     const userId = await getAuthUser();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await request.json().catch(() => ({}));
+    const targetPlan = body.plan === "free" ? "free" : "pro"; // default to pro for backward compatibility
 
     await connectDB();
     const user = await User.findById(userId);
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    // Simulate Stripe payment success by immediately upgrading them
-    user.plan = "pro";
+    // Update the user's subscription plan
+    user.plan = targetPlan;
     await user.save();
 
     // Update the Redis cache and clear any stale rate-limit state
     if (user.apiKey) {
-      await redis.setex(`auth:${user.apiKey}`, 3600, "pro");
+      await redis.setex(`auth:${user.apiKey}`, 3600, targetPlan);
       // Clear any block from the free plan so Pro takes effect immediately
       await redis.del(`blocked:key:${user.apiKey}`);
       // Clear the sliding-window counter so old free-plan hits don't carry over
@@ -90,7 +93,7 @@ export async function PUT() {
     }
 
     return NextResponse.json({
-      message: "Upgraded to Pro successfully!",
+      message: targetPlan === "pro" ? "Upgraded to Pro successfully!" : "Downgraded to Free plan.",
       plan: user.plan,
     });
   } catch (error) {

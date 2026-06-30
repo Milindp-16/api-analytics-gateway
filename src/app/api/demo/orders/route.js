@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { trackRequest } from "@/lib/tracking";
+import { trackRequest, recordLatency } from "@/lib/tracking";
 
 const MOCK_ORDERS = [
   { id: "ORD-001", customer: "Alice Johnson", total: 249.98, status: "delivered", items: 2 },
@@ -13,13 +13,20 @@ const MOCK_ORDERS = [
 ];
 
 export async function GET(request) {
+  const start = performance.now();
+
   const blocked = await trackRequest(request, "/api/demo/orders");
   if (blocked) return blocked;
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     data: MOCK_ORDERS,
     count: MOCK_ORDERS.length,
     endpoint: "/api/demo/orders",
     timestamp: new Date().toISOString(),
   });
+
+  const latency = performance.now() - start;
+  await recordLatency("/api/demo/orders", latency);
+
+  return res;
 }

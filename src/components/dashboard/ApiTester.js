@@ -28,6 +28,15 @@ const SIMULATED_IPS = [
 ];
 
 
+// Helper to hash string to a number
+const hashString = (str) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+};
+
 export default function ApiTester({ onRequestComplete, apiKey, plan = "free" }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState({});
@@ -81,8 +90,14 @@ export default function ApiTester({ onRequestComplete, apiKey, plan = "free" }) 
 
   const handleSingleHit = async (path) => {
     setLoading((prev) => ({ ...prev, [path]: true }));
-    // Pick a random simulated IP for variety
-    const ip = SIMULATED_IPS[Math.floor(Math.random() * SIMULATED_IPS.length)];
+    
+    // Deterministically pick an IP based on the API Key
+    // This ensures a single user/key always comes from the same region
+    let ip = SIMULATED_IPS[0];
+    if (apiKey) {
+      ip = SIMULATED_IPS[hashString(apiKey) % SIMULATED_IPS.length];
+    }
+    
     await hitEndpoint(path, ip);
     setLoading((prev) => ({ ...prev, [path]: false }));
     onRequestComplete?.();
@@ -92,8 +107,11 @@ export default function ApiTester({ onRequestComplete, apiKey, plan = "free" }) 
     setBurstRunning(true);
     setBurstProgress(0);
 
-    // Pick a random IP to act as the "malicious" attacker for this burst session
-    const maliciousIp = SIMULATED_IPS[Math.floor(Math.random() * SIMULATED_IPS.length)];
+    // Use the same deterministic IP for the burst
+    let maliciousIp = SIMULATED_IPS[0];
+    if (apiKey) {
+      maliciousIp = SIMULATED_IPS[hashString(apiKey) % SIMULATED_IPS.length];
+    }
 
     const total = 55; // Enough to trigger rate limit on free (50 threshold), safe on pro (1000 threshold)
     for (let i = 0; i < total; i++) {
