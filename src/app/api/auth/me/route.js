@@ -26,7 +26,7 @@ export async function GET() {
 
     await connectDB();
 
-    const user = await User.findById(decoded.userId).select("-password");
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return NextResponse.json(
         { error: "User not found" },
@@ -53,7 +53,7 @@ export async function DELETE() {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 0,
+    maxAge: 0, //the cookie is already dead and the browser will reject it
     path: "/",
   });
   return response;

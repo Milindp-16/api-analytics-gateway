@@ -40,8 +40,8 @@ export default function RegisterPage() {
         return;
       }
 
-      toast.success("Account created! Redirecting to login…");
-      router.push("/login");//reversible
+      toast.success("Account created! Redirecting to dashboard…");
+      router.push("/dashboard");//reversible
     } catch {
       toast.error("Something went wrong");
       setLoading(false);
