@@ -28,7 +28,7 @@ const SIMULATED_IPS = [
 ];
 
 
-// Helper to hash string to a number
+// Helper to hash string to a number -> maps the API_KEY to the exact same IP everytime
 const hashString = (str) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -41,65 +41,65 @@ export default function ApiTester({ onRequestComplete, apiKey, plan = "free" }) 
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState({});
   const [burstRunning, setBurstRunning] = useState(false);
+  //burstProgress tells how many burst req's are fired
   const [burstProgress, setBurstProgress] = useState(0);
 
   const isPro = plan === "pro";
 
-  const hitEndpoint = useCallback(
-    async (path, simulateIp = null) => {
-      const headers = {};
-      if (simulateIp) {
-        headers["x-simulated-ip"] = simulateIp;
-      }
-      if (apiKey) {
-        headers["x-api-key"] = apiKey;
-      }
+  const hitEndpoint = async (path, simulateIp = null) => {
+    const headers = {};
+    if (simulateIp) {
+      headers["x-simulated-ip"] = simulateIp;
+    }
+    if (apiKey) {
+      headers["x-api-key"] = apiKey;
+    }
 
-      const start = performance.now();
-      try {
-        const res = await fetch(path, { headers });
-        const elapsed = Math.round(performance.now() - start);
-        const data = await res.json();
+    const start = performance.now();
+    try {
+      {/* res is only used to determine whether the request got blocked or not by reading the status code */ }
+      const res = await fetch(path, { headers });
+      {/* client side latency / round trip time */ }
+      const elapsed = Math.round(performance.now() - start);
 
-        const result = {
-          id: Date.now() + Math.random(),
-          path,
-          status: res.status,
-          time: elapsed,
-          ip: simulateIp || "local",
-          timestamp: new Date().toLocaleTimeString(),
-        };
+      const result = {
+        id: Date.now() + Math.random(),
+        path,
+        status: res.status,
+        time: elapsed,
+        ip: simulateIp || "local",
+        timestamp: new Date().toLocaleTimeString(),//gives the exact current time in string format
+      };
 
-        setResults((prev) => [result, ...prev].slice(0, 20));
-        return result;
-      } catch (err) {
-        const result = {
-          id: Date.now() + Math.random(),
-          path,
-          status: "ERR",
-          time: 0,
-          ip: simulateIp || "local",
-          timestamp: new Date().toLocaleTimeString(),
-        };
-        setResults((prev) => [result, ...prev].slice(0, 20));
-        return result;
-      }
-    },
-    [apiKey]
-  );
+      setResults((prev) => [result, ...prev].slice(0, 20));
+      return result;
+    } catch (err) {
+      const result = {
+        id: Date.now() + Math.random(),
+        path,
+        status: "ERR",
+        time: 0,
+        ip: simulateIp || "local",
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setResults((prev) => [result, ...prev].slice(0, 20));
+      return result;
+    }
+  };
 
   const handleSingleHit = async (path) => {
     setLoading((prev) => ({ ...prev, [path]: true }));
-    
+
     // Deterministically pick an IP based on the API Key
     // This ensures a single user/key always comes from the same region
     let ip = SIMULATED_IPS[0];
     if (apiKey) {
       ip = SIMULATED_IPS[hashString(apiKey) % SIMULATED_IPS.length];
     }
-    
+
     await hitEndpoint(path, ip);
     setLoading((prev) => ({ ...prev, [path]: false }));
+    {/* sent by the parent as prop to update the parent components(basically the charts) */ }
     onRequestComplete?.();
   };
 
@@ -212,6 +212,7 @@ export default function ApiTester({ onRequestComplete, apiKey, plan = "free" }) 
               </>
             )}
           </Button>
+          {/* progress bar */}
           {burstRunning && (
             <div className="flex-1">
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
@@ -248,8 +249,8 @@ export default function ApiTester({ onRequestComplete, apiKey, plan = "free" }) 
                       r.status === 200
                         ? "default"
                         : r.status === 429
-                        ? "destructive"
-                        : "secondary"
+                          ? "destructive"
+                          : "secondary"
                     }
                     className="text-[10px] px-1.5 py-0 h-4 font-mono"
                   >

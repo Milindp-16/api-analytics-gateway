@@ -15,9 +15,12 @@ const MOCK_ORDERS = [
 export async function GET(request) {
   const start = performance.now();
 
+  //the incoming request gets intercepted here(acts as mini-middleware)
+  //if we are allowed blocked = null else if api-key is bad or rate limit exceed then blocked = json obj
   const blocked = await trackRequest(request, "/api/demo/orders");
   if (blocked) return blocked;
 
+  //the data inside it is not valuable, it only matters that the request is not blocked
   const res = NextResponse.json({
     data: MOCK_ORDERS,
     count: MOCK_ORDERS.length,
