@@ -3,21 +3,21 @@ import mongoose from "mongoose";
 const UserSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, "Name is required"],
+    required: true,
     trim: true,
-    maxlength: [100, "Name cannot exceed 100 characters"],
+    maxlength: 100,
   },
   email: {
     type: String,
-    required: [true, "Email is required"],
+    required: true,
     unique: true,
     trim: true,
     lowercase: true,
   },
   password: {
     type: String,
-    required: [true, "Password is required"],
-    minlength: [6, "Password must be at least 6 characters"],
+    required: true,
+    minlength: 6,
   },
   createdAt: {
     type: Date,
@@ -26,7 +26,7 @@ const UserSchema = new mongoose.Schema({
   apiKey: {
     type: String,
     unique: true,
-    sparse: true,
+    sparse: true,//only enable the unique rule if they actually have value
   },
   plan: {
     type: String,

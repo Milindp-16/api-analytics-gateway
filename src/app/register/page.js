@@ -22,26 +22,26 @@ export default function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); //browsers naturally want to refresh the web page when you submit a form -> this line prevents that default action
     setLoading(true);
 
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        headers: { "Content-Type": "application/json" }, //signals to the server that the body is in json format
+        body: JSON.stringify(form), //converts the js object to a json 
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
+      if (!res.ok) { //checking the status code (400/409)
         toast.error(data.error || "Registration failed");
         setLoading(false);
         return;
       }
 
       toast.success("Account created! Redirecting to login…");
-      router.push("/login");
+      router.push("/login");//reversible
     } catch {
       toast.error("Something went wrong");
       setLoading(false);
@@ -143,6 +143,7 @@ export default function RegisterPage() {
             </Button>
             <p className="text-sm text-muted-foreground">
               Already have an account?{" "}
+              {/*navigation without page reload*/}
               <Link
                 href="/login"
                 className="font-medium text-primary hover:underline"

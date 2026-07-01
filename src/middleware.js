@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 export function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  // Public paths that don't need auth
-  const publicPaths = ["/login", "/register", "/api/auth", "/api/demo", "/api/analytics"];
+  // Public paths that don't need auth -> redundant backup logic
+  const publicPaths = ["/login", "/register", "/api/auth", "/api/demo"];
   const isPublic = publicPaths.some((path) => pathname.startsWith(path));
 
   // Allow public routes, static files, and the landing page
@@ -22,6 +22,7 @@ export function middleware(request) {
   return NextResponse.next();
 }
 
+//without matcher function the middleware will run on every request
 export const config = {
   matcher: ["/dashboard/:path*", "/api/analytics/:path*"],
 };

@@ -3,10 +3,13 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { hashPassword, signToken } from "@/lib/auth";
 
+//this path only accepts POST req (when frontend send some data it will process it)
 export async function POST(request) {
   try {
+    //destructuring the data
     const { name, email, password } = await request.json();
 
+    //vaildations
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Name, email, and password are required" },
@@ -54,9 +57,8 @@ export async function POST(request) {
     response.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: "/",
+      path: "/", //accessible from all pages
     });
 
     return response;
